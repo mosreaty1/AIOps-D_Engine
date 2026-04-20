@@ -12,18 +12,14 @@ class AlertingService
     /** @var array<string, int> */
     protected array $recentAlerts = [];
 
-    /**
-     * Dispatches an alert for the given incident if not recently dispatched.
-     */
     public function dispatch(Incident $incident, Command $console = null): void
     {
         $dedupKey = $this->generateDedupKey($incident);
 
-        // Deduplication: suppress if alerted in the last 5 minutes
         $now = time();
         if (isset($this->recentAlerts[$dedupKey])) {
             if (($now - $this->recentAlerts[$dedupKey]) < 300) {
-                return; // Suppress duplicate
+                return;
             }
         }
 
@@ -58,7 +54,7 @@ class AlertingService
         if ($incident->severity === 'critical') {
             $console->error($message);
         } elseif ($incident->severity === 'high') {
-            $console->error($message); // Laravel console error is red
+            $console->error($message);
         } elseif ($incident->severity === 'medium') {
             $console->warn($message);
         } else {
@@ -93,14 +89,10 @@ class AlertingService
                 'summary' => $incident->summary,
             ]);
         } catch (\Exception $e) {
-            // Silently fail webhook if configured but unreachable
             Log::warning('Failed to dispatch PulseGuard webhook: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Cleans up the deduplication cache slowly over time.
-     */
     public function cleanup(): void
     {
         $now = time();

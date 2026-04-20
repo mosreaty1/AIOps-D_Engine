@@ -6,20 +6,11 @@ use App\Models\Incident;
 
 class EventCorrelator
 {
-    /**
-     * Correlates anomalies across multiple endpoints into higher-level incidents.
-     *
-     * @param array $allAnomalies Array of anomalies keyed by endpoint
-     * @param array $baselines Original baselines for context
-     * @param array $currentMetrics Original metrics for context
-     * @return Incident[]
-     */
     public function correlate(array $allAnomalies, array $baselines, array $currentMetrics): array
     {
         $incidents = [];
         $globalAnomalies = ['latency' => [], 'error' => [], 'traffic' => []];
 
-        // 1. Group anomalies by type to detect global issues
         foreach ($allAnomalies as $endpoint => $anomalies) {
             foreach ($anomalies as $anomaly) {
                 if ($anomaly['type'] === 'latency_anomaly') {
@@ -39,12 +30,10 @@ class EventCorrelator
             return [];
         }
 
-        // 2. Correlation Rules
         $hasGlobalLatency = count($globalAnomalies['latency']) > ($totalEndpoints / 2);
         $hasGlobalErrors = count($globalAnomalies['error']) > ($totalEndpoints / 2);
         $hasGlobalTraffic = count($globalAnomalies['traffic']) > ($totalEndpoints / 2);
 
-        // SERVICE_DEGRADATION: Widespread latency AND errors
         if ($hasGlobalLatency && $hasGlobalErrors) {
             $affected = array_unique(array_merge($globalAnomalies['latency'], $globalAnomalies['error']));
             $incidents[] = new Incident([
@@ -57,12 +46,10 @@ class EventCorrelator
                 'baseline_values' => $baselines,
                 'observed_values' => $currentMetrics,
             ]);
-            // Clear to prevent duplicate granular incidents for these endpoints
             $globalAnomalies['latency'] = [];
             $globalAnomalies['error'] = [];
         }
 
-        // ERROR_STORM: Widespread errors (without significant global latency)
         if (count($globalAnomalies['error']) > 0) {
             if ($hasGlobalErrors) {
                 $incidents[] = new Incident([
@@ -76,7 +63,6 @@ class EventCorrelator
                     'observed_values' => $currentMetrics,
                 ]);
             } else {
-                // LOCALIZED_ENDPOINT_FAILURE
                 foreach ($globalAnomalies['error'] as $endpoint) {
                     $incidents[] = new Incident([
                         'incident_type' => 'LOCALIZED_ENDPOINT_FAILURE',
@@ -92,7 +78,6 @@ class EventCorrelator
             }
         }
 
-        // LATENCY_SPIKE: Widespread latency
         if (count($globalAnomalies['latency']) > 0) {
             if ($hasGlobalLatency) {
                 $incidents[] = new Incident([
@@ -107,13 +92,12 @@ class EventCorrelator
                 ]);
             } else {
                 foreach ($globalAnomalies['latency'] as $endpoint) {
-                    // Check if we already created a LOCALIZED_ENDPOINT_FAILURE for this
                     $alreadyFlagged = collect($incidents)->contains(function ($incident) use ($endpoint) {
                         return $incident->incident_type === 'LOCALIZED_ENDPOINT_FAILURE' && in_array($endpoint, $incident->affected_endpoints);
                     });
 
                     if (!$alreadyFlagged) {
-                         $incidents[] = new Incident([
+                        $incidents[] = new Incident([
                             'incident_type' => 'LOCALIZED_LATENCY_SPIKE',
                             'severity' => 'medium',
                             'affected_service' => 'api',
@@ -128,11 +112,10 @@ class EventCorrelator
             }
         }
 
-        // TRAFFIC_SURGE
         if ($hasGlobalTraffic) {
             $incidents[] = new Incident([
                 'incident_type' => 'TRAFFIC_SURGE',
-                'severity' => 'low', // Not necessarily bad, but noteworthy
+                'severity' => 'low',
                 'affected_service' => 'global',
                 'affected_endpoints' => $globalAnomalies['traffic'],
                 'summary' => 'System-wide traffic surge detected compared to baseline.',

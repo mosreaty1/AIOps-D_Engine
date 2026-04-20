@@ -12,18 +12,8 @@ use Illuminate\Support\Facades\Storage;
 
 class RunAIOpsDetection extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'aiops:detect';
+    protected $signature = 'pulse:monitor';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Continuously analyze metrics and automatically detect abnormal system behavior.';
 
     protected $endpoints = [
@@ -34,9 +24,6 @@ class RunAIOpsDetection extends Command
         '/api/validate'
     ];
 
-    /**
-     * Execute the console command.
-     */
     public function handle(
         PrometheusClient $prometheusClient,
         BaselineService $baselineService,
@@ -44,50 +31,39 @@ class RunAIOpsDetection extends Command
         EventCorrelator $eventCorrelator,
         AlertingService $alertingService
     ) {
-        $this->info("Starting AIOps Detection Engine...");
+        $this->info("Starting PulseGuard Monitor...");
 
-        // Ensure storage directory exists
-        if (!Storage::disk('local')->exists('aiops')) {
-            Storage::disk('local')->makeDirectory('aiops');
+        if (!Storage::disk('local')->exists('pulseguard')) {
+            Storage::disk('local')->makeDirectory('pulseguard');
         }
 
         while (true) {
             $this->info("--- Loop Start: " . now()->toDateTimeString() . " ---");
-            
+
             $allAnomalies = [];
             $baselinesGlobal = [];
             $currentMetricsGlobal = [];
 
-            // Fetch metrics and baselines for each endpoint
             foreach ($this->endpoints as $endpoint) {
-                // 1. Get baselines
                 $baselines = $baselineService->getBaselinesForEndpoint($endpoint);
                 $baselinesGlobal[$endpoint] = $baselines;
 
-                // 2. Get current metrics (simulate fetching for endpoint from full API results for simplicity, 
-                // or query specifically if needed). Let's fetch recent (last 1m) metrics for clarity.
-                
-                // Helper to extract value from PromQL result matching our endpoint
                 $extractMetric = function($results, $endpoint, $default = 0.0) {
                     if (empty($results)) return $default;
                     foreach ($results as $result) {
                         if (isset($result['metric']['path']) && $result['metric']['path'] === $endpoint) {
                            return (float) ($result['value'][1] ?? $default);
                         }
-                        // Fallback if no path label, mostly for overall metrics test
                     }
                     return $default;
                 };
 
-                // Request rate currently
                 $reqRateResult = $prometheusClient->query("rate(http_requests_total{path=\"{$endpoint}\"}[1m])");
                 $currentReqRate = $extractMetric($reqRateResult, $endpoint, 0.0);
 
-                // Error rate currently
                 $errRateResult = $prometheusClient->query("rate(http_requests_total{path=\"{$endpoint}\", status=~\"5..\"}[1m])");
                 $currentErrRate = $extractMetric($errRateResult, $endpoint, 0.0);
 
-                // Latency currently
                 $latencyResult = $prometheusClient->query("histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{path=\"{$endpoint}\"}[1m]))");
                 $currentLatency = $extractMetric($latencyResult, $endpoint, 0.05);
 
@@ -100,7 +76,6 @@ class RunAIOpsDetection extends Command
 
                 $this->line("Endpoint {$endpoint}: Req Rate: {$currentReqRate}, Err Rate: {$currentErrRate}, Latency: {$currentLatency}");
 
-                // 3. Detect anomalies
                 $anomalies = $anomalyDetector->detect($baselines, $currentMetrics);
                 if (!empty($anomalies)) {
                     $allAnomalies[$endpoint] = $anomalies;
@@ -110,11 +85,9 @@ class RunAIOpsDetection extends Command
                 }
             }
 
-            // 4. Correlate Events
             if (!empty($allAnomalies)) {
                 $incidents = $eventCorrelator->correlate($allAnomalies, $baselinesGlobal, $currentMetricsGlobal);
-                
-                // 5. Alert and Store
+
                 foreach ($incidents as $incident) {
                     $alertingService->dispatch($incident, $this);
                     $this->storeIncident($incident);
@@ -130,8 +103,8 @@ class RunAIOpsDetection extends Command
 
     protected function storeIncident($incident)
     {
-        $path = storage_path('app/aiops/incidents.json');
-        
+        $path = storage_path('app/pulseguard/incidents.json');
+
         $incidents = [];
         if (file_exists($path)) {
             $content = file_get_contents($path);

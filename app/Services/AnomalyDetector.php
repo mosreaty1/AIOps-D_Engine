@@ -4,20 +4,11 @@ namespace App\Services;
 
 class AnomalyDetector
 {
-    /**
-     * Evaluates current metrics against baselines to detect anomalies.
-     *
-     * @param array $baselines The baseline metrics for the endpoint
-     * @param array $currentMetrics The currently observed metrics
-     * @return array List of detected anomalies
-     */
     public function detect(array $baselines, array $currentMetrics): array
     {
         $anomalies = [];
 
-        // 1. Latency Anomaly: latency > 3x baseline
-        // Alternatively, if baseline is very low (e.g., 0.05s), ensure it breaches a minimum threshold (e.g., 0.2s)
-        $minLatencyThreshold = 0.2; 
+        $minLatencyThreshold = 0.2;
         if ($currentMetrics['latency'] > ($baselines['latency'] * 3) && $currentMetrics['latency'] > $minLatencyThreshold) {
             $anomalies[] = [
                 'type' => 'latency_anomaly',
@@ -31,8 +22,6 @@ class AnomalyDetector
             ];
         }
 
-        // 2. Error Rate Anomaly: error rate > 10%
-        // Calculate error percentage
         $totalRequestRate = $currentMetrics['request_rate'];
         $errorPercentage = 0;
         if ($totalRequestRate > 0) {
@@ -49,13 +38,11 @@ class AnomalyDetector
                     $totalRequestRate
                 ),
                 'observed' => $errorPercentage,
-                'baseline' => 10, // absolute threshold in this case
+                'baseline' => 10,
             ];
         }
 
-        // 3. Traffic Anomaly (Spike): request rate > 2x baseline
-        // Ensure baseline is non-zero and we have a minimum traffic to consider it a spike
-        $minTrafficThreshold = 5.0; // req/s
+        $minTrafficThreshold = 5.0;
         if ($currentMetrics['request_rate'] > ($baselines['request_rate'] * 2) && $currentMetrics['request_rate'] > $minTrafficThreshold) {
             $anomalies[] = [
                 'type' => 'traffic_anomaly',

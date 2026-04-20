@@ -1,6 +1,6 @@
 # PulseGuard
 
-A lightweight PHP service that monitors application metrics, detects behavioral anomalies, and groups related signals into actionable incidents.
+A simple PHP service for monitoring application metrics, spotting anomalies, and grouping related signals into clear, actionable incidents.
 
 ## What it does
 

@@ -68,7 +68,7 @@ class AlertingService
 
     protected function alertJson(Incident $incident): void
     {
-        Log::channel('single')->info('AIOPS_ALERT', [
+        Log::channel('single')->info('PULSEGUARD_ALERT', [
             'incident_id' => $incident->incident_id,
             'incident_type' => $incident->incident_type,
             'severity' => $incident->severity,
@@ -79,7 +79,7 @@ class AlertingService
 
     protected function alertWebhook(Incident $incident): void
     {
-        $webhookUrl = config('services.aiops.webhook_url');
+        $webhookUrl = config('services.pulseguard.webhook_url');
         if (!$webhookUrl) {
             return;
         }
@@ -94,7 +94,7 @@ class AlertingService
             ]);
         } catch (\Exception $e) {
             // Silently fail webhook if configured but unreachable
-            Log::warning('Failed to dispatch AIOps webhook: ' . $e->getMessage());
+            Log::warning('Failed to dispatch PulseGuard webhook: ' . $e->getMessage());
         }
     }
 

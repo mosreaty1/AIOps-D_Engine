@@ -17,7 +17,7 @@ class RunAIOpsDetection extends Command
      *
      * @var string
      */
-    protected $signature = 'aiops:detect';
+    protected $signature = 'pulse:monitor';
 
     /**
      * The console command description.
@@ -44,11 +44,11 @@ class RunAIOpsDetection extends Command
         EventCorrelator $eventCorrelator,
         AlertingService $alertingService
     ) {
-        $this->info("Starting AIOps Detection Engine...");
+        $this->info("Starting PulseGuard Monitor...");
 
         // Ensure storage directory exists
-        if (!Storage::disk('local')->exists('aiops')) {
-            Storage::disk('local')->makeDirectory('aiops');
+        if (!Storage::disk('local')->exists('pulseguard')) {
+            Storage::disk('local')->makeDirectory('pulseguard');
         }
 
         while (true) {
@@ -130,7 +130,7 @@ class RunAIOpsDetection extends Command
 
     protected function storeIncident($incident)
     {
-        $path = storage_path('app/aiops/incidents.json');
+        $path = storage_path('app/pulseguard/incidents.json');
         
         $incidents = [];
         if (file_exists($path)) {
